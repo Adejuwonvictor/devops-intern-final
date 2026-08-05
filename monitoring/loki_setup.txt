@@ -1,0 +1,110 @@
+----------------------------------------------------------------
+1. Prerequisites
+----------------------------------------------------------------
+- Docker installed and running
+- A running container to generate logs (e.g. devops-hello image)
+- curl or Grafana for querying
+
+----------------------------------------------------------------
+2. Start Loki
+----------------------------------------------------------------
+# Create a minimal local config file
+cat > loki-config.yaml <<'EOF'
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /tmp/loki
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  allow_structured_metadata: true
+EOF
+
+# Run Loki in Docker
+
+docker run -d --name loki -p 3100:3100 \
+  -v "$(pwd)/loki-config.yaml:/etc/loki/local-config.yaml" \
+  grafana/loki:2.9.0 \
+  -config.file=/etc/loki/local-config.yaml
+
+# Verify it's up
+curl -s http://localhost:3100/ready
+
+----------------------------------------------------------------
+3. Start Promtail to forward container logs to Loki
+----------------------------------------------------------------
+# promtail-config.yaml
+cat > promtail-config.yaml <<'EOF'
+server:
+  http_listen_port: 9080
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+    pipeline_stages:
+      - docker: {}
+EOF
+
+docker run -d --name promtail \
+  -v "$(pwd)/promtail-config.yaml:/etc/promtail/config.yml" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  grafana/promtail:2.9.0 \
+  -config.file=/etc/promtail/config.yml
+
+----------------------------------------------------------------
+4. Generate logs (use the devops-hello image)
+----------------------------------------------------------------
+docker run --rm --name hello-runner devops-hello:latest
+
+----------------------------------------------------------------
+5. View logs via the Loki HTTP API
+----------------------------------------------------------------
+# Tail all logs from the devops-hello container
+curl -G -s "http://localhost:3100/loki/api/v1/query" \
+  --data-urlencode 'query={container=~".+hello.+\|devops-hello"}' | jq .
+
+
+----------------------------------------------------------------
+7. Useful commands
+----------------------------------------------------------------
+# Stop the stack
+docker stop loki promtail && docker rm loki promtail
+
+# Check Loki version
+docker exec loki loki -version
+
+# List running scrape targets
+curl -s http://localhost:9080/targets | jq .
