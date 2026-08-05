@@ -99,7 +99,7 @@ The workflow at `.github/workflows/ci.yml` runs automatically on every push to `
 **Status Badge** :
 
 ```markdown
-![CI](https://github.com/Adejuwonvictor/devops-intern-final/actions/workflows/ci.yml/badge.svg)
+![CI](https://img.shields.io/github/actions/workflow/status/Adejuwonvictor/devops-intern-final/ci.yml?branch=main&label=CI&logo=github)
 ```
 
 ---
