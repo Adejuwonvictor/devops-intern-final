@@ -96,7 +96,7 @@ Hello, DevOps!
 
 The workflow at `.github/workflows/ci.yml` runs automatically on every push to `main` (and on pull requests). It checks out the code, sets up Python, and runs `python hello.py`.
 
-**Status Badge** (replace `<your-username>` with your GitHub handle):
+**Status Badge** :
 
 ```markdown
 ![CI](https://github.com/Adejuwonvictor/devops-intern-final/actions/workflows/ci.yml/badge.svg)
